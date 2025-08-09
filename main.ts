@@ -21,6 +21,7 @@ export default class ClaudeCodeBridge extends Plugin {
 	private port: number = 0;
 	private lockFile: string = "";
 	private connections: Set<any> = new Set();
+	private authToken: string = "";
 
 	async onload() {
 		await this.loadSettings();
@@ -155,7 +156,7 @@ export default class ClaudeCodeBridge extends Plugin {
 		this.lockFile = path.join(claudeDir, `${this.port}.lock`);
 
 		// Generate auth token
-		const authToken =
+		this.authToken =
 			crypto.randomBytes(16).toString("hex") +
 			"-" +
 			crypto.randomBytes(2).toString("hex") +
@@ -174,7 +175,7 @@ export default class ClaudeCodeBridge extends Plugin {
 			ideName: "Obsidian",
 			transport: "ws",
 			runningInWindows: process.platform === "win32",
-			authToken: authToken,
+			authToken: this.authToken,
 			port: this.port,
 		};
 
@@ -185,15 +186,35 @@ export default class ClaudeCodeBridge extends Plugin {
 	private handleWebSocketUpgrade(request: any, socket: any, head: Buffer) {
 		console.log("WebSocket upgrade request:", {
 			headers: request.headers,
-			url: request.url
+			url: request.url,
 		});
-		
+
 		const key = request.headers["sec-websocket-key"];
 		if (!key) {
 			console.log("No sec-websocket-key header, rejecting");
 			socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
 			return;
 		}
+
+		// Validate authentication token
+		const authHeader = request.headers["x-claude-code-ide-authorization"];
+		if (!authHeader) {
+			console.log("Missing authentication header, rejecting");
+			socket.end(
+				"HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\n\r\nMissing authentication header: x-claude-code-ide-authorization"
+			);
+			return;
+		}
+
+		if (authHeader !== this.authToken) {
+			console.log("Invalid authentication token, rejecting");
+			socket.end(
+				"HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\n\r\nInvalid authentication token"
+			);
+			return;
+		}
+
+		console.log("Authentication successful");
 
 		// Generate WebSocket accept key
 		const acceptKey = crypto
@@ -204,7 +225,7 @@ export default class ClaudeCodeBridge extends Plugin {
 		// Send WebSocket handshake response
 		const responseHeaders = [
 			"HTTP/1.1 101 Switching Protocols",
-			"Upgrade: websocket", 
+			"Upgrade: websocket",
 			"Connection: Upgrade",
 			`Sec-WebSocket-Accept: ${acceptKey}`,
 			"Sec-WebSocket-Protocol: mcp",
@@ -229,11 +250,12 @@ export default class ClaudeCodeBridge extends Plugin {
 
 		socket.on("data", (data: Buffer) => {
 			try {
-				console.log("Raw data received:", data);
+				console.log("Raw data received, length:", data.length, "data:", data.toString('hex').substring(0, 100));
 				// Handle WebSocket frame parsing
 				const messages = this.parseWebSocketFrames(data, buffer);
 				buffer = messages.remaining;
 
+				console.log("Parsed messages count:", messages.parsed.length);
 				messages.parsed.forEach((messageText) => {
 					try {
 						console.log("Received message:", messageText);
@@ -393,25 +415,26 @@ export default class ClaudeCodeBridge extends Plugin {
 			return;
 		}
 
+		if (this.connections.size === 0) {
+			new Notice("No Claude Code connections active");
+			return;
+		}
+
 		const selection = editor.getSelection();
-		let contextMessage: any;
+		let atMentionMessage: any;
 
 		if (selection) {
-			// Tag selection with line numbers
+			// Tag selection with line numbers (0-indexed for Claude)
 			const from = editor.getCursor("from");
 			const to = editor.getCursor("to");
 
-			contextMessage = {
+			atMentionMessage = {
 				jsonrpc: "2.0",
-				method: "context/add",
+				method: "at_mentioned",
 				params: {
-					type: "selection",
-					file: file.path,
-					content: selection,
-					range: {
-						start: { line: from.line + 1, character: from.ch },
-						end: { line: to.line + 1, character: to.ch },
-					},
+					filePath: file.path,
+					lineStart: from.line, // Already 0-indexed
+					lineEnd: to.line, // Already 0-indexed
 				},
 			};
 
@@ -422,28 +445,19 @@ export default class ClaudeCodeBridge extends Plugin {
 			);
 		} else {
 			// Tag entire file
-			const content = await this.app.vault.read(file);
-			contextMessage = {
+			atMentionMessage = {
 				jsonrpc: "2.0",
-				method: "context/add",
+				method: "at_mentioned",
 				params: {
-					type: "file",
-					file: file.path,
-					content: content,
+					filePath: file.path,
 				},
 			};
 
 			new Notice(`Tagged file: ${file.path}`);
 		}
 
-		// Send to all connected Claude Code instances
-		if (this.connections.size === 0) {
-			new Notice("No Claude Code connections active");
-			return;
-		}
-
-		this.broadcast(contextMessage);
-		console.log("Sent context to Claude Code:", contextMessage);
+		this.broadcast(atMentionMessage);
+		console.log("Sent at-mention to Claude Code:", atMentionMessage);
 	}
 
 	private parseWebSocketFrames(
