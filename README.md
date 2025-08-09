@@ -75,9 +75,11 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 
 ### Technical Implementation
 
+- **Modular Architecture** - Clean separation of concerns across multiple TypeScript modules
 - **Zero External Dependencies** - Uses only Node.js built-in modules (`http`, `crypto`, `fs`, `net`)
 - **Electron Compatible** - Designed specifically for Obsidian's Electron environment
 - **Secure by Design** - Authentication required, connections bound to localhost only
+- **Development-Aware Logging** - Reduced console output in production builds
 - **Hot Reload Support** - Development workflow with automatic plugin reloading
 
 ## Development
@@ -117,12 +119,27 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 - `npm run build` - Production build with TypeScript type checking
 - `npm run version` - Bump version and update manifest files
 
-### Key Files
+### Project Structure
 
-- `main.ts` - Core plugin implementation with WebSocket server
-- `manifest.json` - Plugin metadata and configuration  
-- `CLAUDE.md` - Development guidance and architecture documentation
-- `esbuild.config.mjs` - Build configuration for TypeScript compilation
+```
+claude-code-bridge/
+├── main.ts              # Core plugin class and Obsidian integration (~280 lines)
+├── src/
+│   ├── websocket.ts     # WebSocket server implementation
+│   ├── mcp-handler.ts   # MCP protocol message handling
+│   ├── lock-file.ts     # IDE discovery and auth token management
+│   └── logger.ts        # Development-aware logging system
+├── manifest.json        # Plugin metadata and configuration  
+├── package.json         # Updated with correct plugin details
+├── CLAUDE.md            # Development guidance and architecture documentation
+└── esbuild.config.mjs   # Build configuration for TypeScript compilation
+```
+
+**Architecture Benefits:**
+- **Maintainable** - Each module has a single responsibility
+- **Testable** - Clean interfaces between components
+- **Readable** - Main plugin file reduced from 668 to ~280 lines
+- **Debuggable** - Modular logging with development awareness
 
 ## Protocol Details
 

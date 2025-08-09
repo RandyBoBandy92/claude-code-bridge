@@ -25,32 +25,41 @@ The build process includes TypeScript type checking with `tsc -noEmit -skipLibCh
 
 ## Architecture Overview
 
+The plugin follows a modular architecture with separate concerns cleanly divided:
+
 ### Core Components
 
-**ClaudeCodeBridge Plugin Class** (`main.ts:18-338`)
-- Main plugin class extending Obsidian's Plugin base class
-- Manages WebSocket server lifecycle and connections
-- Handles MCP (Model Context Protocol) message routing
+**ClaudeCodeBridge Plugin Class** (`main.ts`)
+- Main plugin class extending Obsidian's Plugin base class (~280 lines, down from 668)
+- Manages WebSocket server lifecycle and coordinates between modules
+- Handles Obsidian workspace events (file changes, selection tracking)
 - Provides file tagging functionality via keyboard shortcut
 
-**IDE Discovery System** (`main.ts:132-151`)
-- Creates lock files in `~/.claude/ide/` for Claude Code's `/ide` command to discover
-- Registers Obsidian as an available IDE connection option
-- Provides connection details (port, type, name) for automatic detection
-
-**WebSocket Communication Layer** (`main.ts:186-236`)
+**WebSocket Server Module** (`src/websocket.ts`)
+- Encapsulates all WebSocket server functionality
 - Creates HTTP server with WebSocket upgrade handling using Node.js built-in modules
 - Implements RFC 6455 compliant WebSocket protocol without external dependencies
-- Includes secure authentication using `x-claude-code-ide-authorization` header validation
+- Handles secure authentication using `x-claude-code-ide-authorization` header validation
 - Manages multiple concurrent connections with proper frame parsing and masking
-- Enables Claude Code's `/ide` command to connect to Obsidian securely
 - Uses Node.js `http`, `crypto` modules for full Electron compatibility
 
-**Message Handling System** (`main.ts:187-261`)
+**MCP Handler Module** (`src/mcp-handler.ts`)
+- Dedicated MCP (Model Context Protocol) message processing
 - Supports `files/read` - Read file contents from Obsidian vault
 - Supports `workspace/selection` - Get current editor selection and cursor position
-- JSON-RPC 2.0 compliant message format
-- Error handling with proper MCP error codes
+- JSON-RPC 2.0 compliant message format with proper error handling
+
+**Lock File Manager Module** (`src/lock-file.ts`)
+- Manages IDE discovery lock files in `~/.claude/ide/`
+- Handles secure authentication token generation
+- Creates/removes lock files for Claude Code's `/ide` command to discover
+- Registers Obsidian as an available IDE connection option
+
+**Logger Module** (`src/logger.ts`)
+- Development-aware logging system
+- Reduces console output in production builds
+- Maintains error logging while suppressing debug logs in production
+- Auto-detects development environment
 
 ### Key Features
 
@@ -59,14 +68,14 @@ The build process includes TypeScript type checking with `tsc -noEmit -skipLibCh
 - Allows Claude Code's `/ide` command to discover and connect to Obsidian
 - Shows as "Obsidian" option in available IDE connections
 
-**File/Selection Tagging** (`main.ts:477-527`)
+**File/Selection Tagging**
 - Hotkey: `Cmd+Option+K` (Mac) / `Ctrl+Alt+K` (Windows/Linux)  
 - Uses MCP-compliant `at_mentioned` method with `filePath`, `lineStart`, `lineEnd` parameters
 - Tags entire file if no selection, or specific text selection with 0-indexed line numbers
 - Broadcasts at-mentions to all connected Claude Code instances
 - Shows notifications with tagged content details and line ranges
 
-**Real-time File Context Tracking** (`main.ts:101-143`)
+**Real-time File Context Tracking**
 - Automatic `selection_changed` notifications when switching files or changing selections
 - Shows current file in Claude Code's "In [filename]" indicator (bottom corner)
 - Tracks `file-open`, `active-leaf-change`, and `editor-change` events
@@ -74,10 +83,11 @@ The build process includes TypeScript type checking with `tsc -noEmit -skipLibCh
 - Sends initial file context when Claude Code connects
 - Full parity with VS Code/Cursor IDE integration
 
-**Connection Management** (`main.ts:153-184`)
+**Connection Management**
 - Tracks active WebSocket connections in a Set
 - Handles connection lifecycle (connect, message, close, error)
 - Automatic cleanup on plugin unload
+- Clean separation between connection handling and business logic
 
 ## Plugin Configuration
 
@@ -122,6 +132,7 @@ Created at `~/.claude/ide/{port}.lock` for `/ide` command discovery:
 - **obsidian** - Core Obsidian API for plugin development
 - Built-in Node.js modules: `fs`, `path`, `os`, `net`, `http`, `crypto`
 - **Note:** Zero external dependencies for WebSocket functionality - uses pure Node.js implementation for maximum Electron compatibility
+- **Development dependencies only:** TypeScript, ESBuild, and build tooling
 
 ### Authentication System
 - **Secure Token Validation**: Uses UUID v4 authentication tokens stored in lock files
@@ -149,7 +160,7 @@ The plugin implements the WebSocket variant of Model Context Protocol (MCP) used
 - `resources/list` - Returns available resources (currently empty)
 
 ### Supported Notifications
-- `at_mentioned` - Sent when user tags files/selections with `Cmd+Shift+T`
+- `at_mentioned` - Sent when user tags files/selections with `Cmd+Option+K`
   - Format: `{filePath: string, lineStart?: number, lineEnd?: number}`
 - `selection_changed` - Sent automatically when switching files or changing selections  
   - Format: `{text: string, filePath: string, fileUrl: string, selection: {start, end, isEmpty}}`
