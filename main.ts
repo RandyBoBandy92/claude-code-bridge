@@ -62,13 +62,18 @@ export default class ClaudeCodeBridge extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("editor-change", (editor) => {
 				if (
-					this.webSocketServer?.getConnectionCount() > 0 &&
+					this.webSocketServer &&
+					this.webSocketServer.getConnectionCount() > 0 &&
 					this.currentFile
 				) {
 					// Debounce selection changes to avoid spam
-					clearTimeout(this.selectionChangeTimeout);
+					if (this.selectionChangeTimeout) {
+						clearTimeout(this.selectionChangeTimeout);
+					}
 					this.selectionChangeTimeout = setTimeout(() => {
-						this.sendSelectionChanged(this.currentFile!);
+						if (this.currentFile) {
+							this.sendSelectionChanged(this.currentFile);
+						}
 					}, 300);
 				}
 			})
@@ -88,7 +93,6 @@ export default class ClaudeCodeBridge extends Plugin {
 		}
 	}
 
-
 	async onunload() {
 		if (this.selectionChangeTimeout) {
 			clearTimeout(this.selectionChangeTimeout);
@@ -103,7 +107,8 @@ export default class ClaudeCodeBridge extends Plugin {
 		// Only notify if file actually changed and we have connections
 		if (
 			newFilePath !== this.currentFile &&
-			this.webSocketServer?.getConnectionCount() > 0
+			this.webSocketServer &&
+			this.webSocketServer.getConnectionCount() > 0
 		) {
 			this.currentFile = newFilePath;
 
@@ -142,7 +147,9 @@ export default class ClaudeCodeBridge extends Plugin {
 			},
 		};
 
-		this.webSocketServer?.broadcast(selectionChangedMessage);
+		if (this.webSocketServer) {
+			this.webSocketServer.broadcast(selectionChangedMessage);
+		}
 		logger.debug(
 			"Sent selection_changed notification:",
 			selectionChangedMessage
@@ -165,16 +172,19 @@ export default class ClaudeCodeBridge extends Plugin {
 							this.webSocketServer
 						)
 					),
-				(socket) => this.handleConnection(socket),
+				(socket) => this.handleConnection(socket)
 			);
 
 			// Start the server
 			await this.webSocketServer.start();
 
 			// Create lock file for IDE detection and get auth token
+			// TypeScript doesn't know about basePath but it exists at runtime
+			const vaultPath =
+				(this.app.vault.adapter as any).basePath || process.cwd();
 			const authToken = await this.lockFileManager.createLockFile(
 				this.port,
-				this.app.vault.adapter.basePath || process.cwd()
+				vaultPath
 			);
 			this.webSocketServer.setAuthToken(authToken);
 
