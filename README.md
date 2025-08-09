@@ -6,7 +6,7 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
 
 🔗 **Seamless IDE Integration** - Obsidian appears as "Obsidian" in Claude Code's `/ide` command list  
 🔐 **Secure Authentication** - Uses cryptographic tokens for secure WebSocket connections  
-📝 **File & Selection Tagging** - Tag entire files or specific text selections with `Cmd+Shift+T`  
+📝 **File & Selection Tagging** - Tag entire files or specific text selections with `Cmd+Option+K`  
 📍 **Real-time File Context** - Shows "In [filename]" in Claude Code when switching files  
 🚀 **Zero Dependencies** - Pure Node.js implementation using only built-in modules  
 ⚡ **Real-time Communication** - MCP-compliant WebSocket protocol for instant messaging  
@@ -50,8 +50,8 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
    - Status should change to "Connected to Obsidian"
 
 2. **Tag Files and Selections**
-   - **Tag entire file**: Place cursor in file, press `Cmd+Shift+T` (Mac) or `Ctrl+Shift+T` (Windows/Linux)
-   - **Tag selection**: Select text, press `Cmd+Shift+T` (Mac) or `Ctrl+Shift+T` (Windows/Linux)
+   - **Tag entire file**: Place cursor in file, press `Cmd+Option+K` (Mac) or `Ctrl+Alt+K` (Windows/Linux)
+   - **Tag selection**: Select text, press `Cmd+Option+K` (Mac) or `Ctrl+Alt+K` (Windows/Linux)
    - Tagged content is instantly available to Claude Code for analysis
 
 3. **Verify Connection & File Context**

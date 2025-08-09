@@ -60,7 +60,7 @@ The build process includes TypeScript type checking with `tsc -noEmit -skipLibCh
 - Shows as "Obsidian" option in available IDE connections
 
 **File/Selection Tagging** (`main.ts:477-527`)
-- Hotkey: `Cmd+Shift+T` (Mac) / `Ctrl+Shift+T` (Windows/Linux)  
+- Hotkey: `Cmd+Option+K` (Mac) / `Ctrl+Alt+K` (Windows/Linux)  
 - Uses MCP-compliant `at_mentioned` method with `filePath`, `lineStart`, `lineEnd` parameters
 - Tags entire file if no selection, or specific text selection with 0-indexed line numbers
 - Broadcasts at-mentions to all connected Claude Code instances
@@ -114,7 +114,7 @@ Created at `~/.claude/ide/{port}.lock` for `/ide` command discovery:
 1. Start the plugin (check console logs for server startup confirmation)
 2. Run Claude Code's `/ide` command - Obsidian should appear as an available option
 3. Connect to Obsidian from Claude Code
-4. Test file tagging with `Cmd+Shift+T` and selection tagging
+4. Test file tagging with `Cmd+Option+K` and selection tagging
 5. Monitor console logs for message flow
 6. Verify MCP protocol compliance
 

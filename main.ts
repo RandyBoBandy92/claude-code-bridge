@@ -37,7 +37,7 @@ export default class ClaudeCodeBridge extends Plugin {
 		this.addCommand({
 			id: "tag-for-claude",
 			name: "Tag file/selection for Claude Code",
-			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "t" }],
+			hotkeys: [{ modifiers: ["Mod", "Alt"], key: "k" }],
 			editorCallback: (editor: Editor, view: MarkdownView) =>
 				this.tagForClaude(editor, view),
 		});
