@@ -7,6 +7,7 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
 🔗 **Seamless IDE Integration** - Obsidian appears as "Obsidian" in Claude Code's `/ide` command list  
 🔐 **Secure Authentication** - Uses cryptographic tokens for secure WebSocket connections  
 📝 **File & Selection Tagging** - Tag entire files or specific text selections with `Cmd+Shift+T`  
+📍 **Real-time File Context** - Shows "In [filename]" in Claude Code when switching files  
 🚀 **Zero Dependencies** - Pure Node.js implementation using only built-in modules  
 ⚡ **Real-time Communication** - MCP-compliant WebSocket protocol for instant messaging  
 🛡️ **Connection Security** - Authenticated connections with proper error handling  
@@ -53,8 +54,10 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
    - **Tag selection**: Select text, press `Cmd+Shift+T` (Mac) or `Ctrl+Shift+T` (Windows/Linux)
    - Tagged content is instantly available to Claude Code for analysis
 
-3. **Verify Connection**
-   - Status bar shows: "Claude Code: Connected (1)" when active
+3. **Verify Connection & File Context**
+   - Status bar shows: "Claude Code: Connected (1)" when active  
+   - **"In [filename]" appears in Claude Code's bottom corner** showing your current file
+   - Switch between files in Obsidian to see real-time context updates
    - Console logs show connection and tagging activity
    - Claude Code receives at-mentions for tagged content
 
@@ -69,6 +72,7 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 3. **WebSocket Communication** - RFC 6455 compliant WebSocket server with custom frame parsing
 4. **MCP Protocol** - Implements Claude Code's WebSocket variant of Model Context Protocol
 5. **At-Mention Broadcasting** - Sends tagged content using `at_mentioned` notifications
+6. **Real-time Context Tracking** - Automatically sends `selection_changed` notifications for file context
 
 ### Technical Implementation
 
@@ -144,6 +148,24 @@ The plugin implements Claude Code's WebSocket variant of MCP:
       "filePath": "/path/to/file.md",
       "lineStart": 10,
       "lineEnd": 15
+    }
+  }
+  ```
+
+- `selection_changed` - When switching files or changing selections (enables file context display)
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "method": "selection_changed",
+    "params": {
+      "text": "selected text",
+      "filePath": "/path/to/file.md",
+      "fileUrl": "file:///path/to/file.md",
+      "selection": {
+        "start": {"line": 0, "character": 0},
+        "end": {"line": 0, "character": 10},
+        "isEmpty": false
+      }
     }
   }
   ```

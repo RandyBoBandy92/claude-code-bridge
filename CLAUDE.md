@@ -59,12 +59,20 @@ The build process includes TypeScript type checking with `tsc -noEmit -skipLibCh
 - Allows Claude Code's `/ide` command to discover and connect to Obsidian
 - Shows as "Obsidian" option in available IDE connections
 
-**File/Selection Tagging** (`main.ts:405-455`)
+**File/Selection Tagging** (`main.ts:477-527`)
 - Hotkey: `Cmd+Shift+T` (Mac) / `Ctrl+Shift+T` (Windows/Linux)  
 - Uses MCP-compliant `at_mentioned` method with `filePath`, `lineStart`, `lineEnd` parameters
 - Tags entire file if no selection, or specific text selection with 0-indexed line numbers
 - Broadcasts at-mentions to all connected Claude Code instances
 - Shows notifications with tagged content details and line ranges
+
+**Real-time File Context Tracking** (`main.ts:101-143`)
+- Automatic `selection_changed` notifications when switching files or changing selections
+- Shows current file in Claude Code's "In [filename]" indicator (bottom corner)
+- Tracks `file-open`, `active-leaf-change`, and `editor-change` events
+- Debounced selection tracking (300ms) to prevent notification spam
+- Sends initial file context when Claude Code connects
+- Full parity with VS Code/Cursor IDE integration
 
 **Connection Management** (`main.ts:153-184`)
 - Tracks active WebSocket connections in a Set
@@ -143,7 +151,10 @@ The plugin implements the WebSocket variant of Model Context Protocol (MCP) used
 
 ### Supported Notifications
 - `at_mentioned` - Sent when user tags files/selections with `Cmd+Shift+T`
-- Format: `{filePath: string, lineStart?: number, lineEnd?: number}`
+  - Format: `{filePath: string, lineStart?: number, lineEnd?: number}`
+- `selection_changed` - Sent automatically when switching files or changing selections  
+  - Format: `{text: string, filePath: string, fileUrl: string, selection: {start, end, isEmpty}}`
+  - Enables "In [filename]" display in Claude Code bottom corner
 
 ### Message Format
 All messages follow JSON-RPC 2.0 specification with MCP-specific parameters.
