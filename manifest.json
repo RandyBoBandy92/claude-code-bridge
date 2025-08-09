@@ -5,6 +5,6 @@
 	"minAppVersion": "0.15.0",
 	"description": "Bridge between Obsidian and Claude Code for seamless file/selection tagging",
 	"author": "Randy",
-	"authorUrl": "",
+	"authorUrl": "https://github.com/RandyBoBandy92",
 	"isDesktopOnly": true
 }

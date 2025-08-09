@@ -20,7 +20,7 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
    - Clone this repository into your Obsidian vault's plugins directory:
    ```bash
    cd /path/to/your/vault/.obsidian/plugins/
-   git clone https://github.com/yourusername/claude-code-bridge.git
+   git clone https://github.com/RandyBoBandy92/claude-code-bridge.git
    ```
 
 2. **Install Dependencies**
@@ -94,7 +94,7 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/yourusername/claude-code-bridge.git
+   git clone https://github.com/RandyBoBandy92/claude-code-bridge.git
    cd claude-code-bridge
    ```
 
