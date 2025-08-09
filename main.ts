@@ -22,6 +22,9 @@ export default class ClaudeCodeBridge extends Plugin {
 	private lockFile: string = "";
 	private connections: Set<any> = new Set();
 	private authToken: string = "";
+	private currentFile: string | null = null;
+	private statusBarItem: HTMLElement | null = null;
+	private selectionChangeTimeout: NodeJS.Timeout | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -41,8 +44,35 @@ export default class ClaudeCodeBridge extends Plugin {
 		});
 
 		// Add status bar item to show bridge status
-		const statusBarItemEl = this.addStatusBarItem();
-		this.updateStatusBar(statusBarItemEl);
+		this.statusBarItem = this.addStatusBarItem();
+		this.updateStatusBar(this.statusBarItem);
+
+		// Register workspace events for file tracking
+		this.registerEvent(
+			this.app.workspace.on('file-open', (file) => {
+				this.handleFileChange(file);
+			})
+		);
+
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', () => {
+				const activeFile = this.app.workspace.getActiveFile();
+				this.handleFileChange(activeFile);
+			})
+		);
+
+		// Also track selection changes within the same file
+		this.registerEvent(
+			this.app.workspace.on('editor-change', (editor) => {
+				if (this.connections.size > 0 && this.currentFile) {
+					// Debounce selection changes to avoid spam
+					clearTimeout(this.selectionChangeTimeout);
+					this.selectionChangeTimeout = setTimeout(() => {
+						this.sendSelectionChanged(this.currentFile!);
+					}, 300);
+				}
+			})
+		);
 
 		console.log(
 			"Claude Code Bridge plugin loaded and initialized successfully"
@@ -50,6 +80,9 @@ export default class ClaudeCodeBridge extends Plugin {
 	}
 
 	async onunload() {
+		if (this.selectionChangeTimeout) {
+			clearTimeout(this.selectionChangeTimeout);
+		}
 		await this.closeBridge();
 		console.log("Claude Code Bridge unloaded");
 	}
@@ -64,6 +97,49 @@ export default class ClaudeCodeBridge extends Plugin {
 		} else {
 			statusBarItem.setText("Claude Code: Disconnected");
 		}
+	}
+
+	private handleFileChange(file: any) {
+		const newFilePath = file?.path || null;
+		
+		// Only notify if file actually changed and we have connections
+		if (newFilePath !== this.currentFile && this.connections.size > 0) {
+			this.currentFile = newFilePath;
+			
+			if (newFilePath) {
+				console.log(`File changed to: ${newFilePath}`);
+				this.sendSelectionChanged(newFilePath);
+			}
+		}
+	}
+
+	private sendSelectionChanged(filePath: string) {
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!activeView) {
+			return;
+		}
+
+		const editor = activeView.editor;
+		const cursor = editor.getCursor();
+		const selection = editor.getSelection();
+
+		const selectionChangedMessage = {
+			jsonrpc: "2.0",
+			method: "selection_changed",
+			params: {
+				text: selection || "",
+				filePath: filePath,
+				fileUrl: `file://${filePath}`,
+				selection: {
+					start: { line: cursor.line, character: cursor.ch },
+					end: { line: cursor.line, character: cursor.ch + (selection?.length || 0) },
+					isEmpty: !selection || selection.length === 0
+				}
+			}
+		};
+
+		this.broadcast(selectionChangedMessage);
+		console.log("Sent selection_changed notification:", selectionChangedMessage);
 	}
 
 	private async initializeBridge() {
@@ -245,6 +321,9 @@ export default class ClaudeCodeBridge extends Plugin {
 		console.log(
 			`Claude Code connected. Total connections: ${this.connections.size}`
 		);
+		if (this.statusBarItem) {
+			this.updateStatusBar(this.statusBarItem);
+		}
 
 		let buffer = Buffer.alloc(0);
 
@@ -277,6 +356,9 @@ export default class ClaudeCodeBridge extends Plugin {
 			console.log(
 				`Claude Code disconnected (hadError: ${hadError}). Total connections: ${this.connections.size}`
 			);
+			if (this.statusBarItem) {
+				this.updateStatusBar(this.statusBarItem);
+			}
 		});
 
 		socket.on("error", (error: any) => {
@@ -288,6 +370,15 @@ export default class ClaudeCodeBridge extends Plugin {
 		console.log(
 			"WebSocket connection established, waiting for client messages"
 		);
+
+		// Send initial file context if we have an active file
+		const activeFile = this.app.workspace.getActiveFile();
+		if (activeFile) {
+			this.currentFile = activeFile.path;
+			setTimeout(() => {
+				this.sendSelectionChanged(activeFile.path);
+			}, 1000); // Give Claude Code time to initialize
+		}
 	}
 
 	private async handleMCPMessage(message: any, ws: any) {

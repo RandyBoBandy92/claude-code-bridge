@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is the **Claude Code Bridge** plugin for Obsidian - a TypeScript plugin that creates a WebSocket bridge between Obsidian and Claude Code's `/ide` command, enabling Obsidian to appear as an available IDE connection. The plugin allows users to tag files or text selections in Obsidian and send them directly to Claude Code for analysis.
+This is the **Claude Code Bridge** plugin for Obsidian - a fully functional TypeScript plugin that implements a WebSocket-based MCP (Model Context Protocol) server, enabling seamless integration between Obsidian and Claude Code's `/ide` command. The plugin creates a secure, authenticated connection that allows Claude Code to appear as "Obsidian" in the IDE list, with full support for file and selection tagging.
 
 ## Development Commands
 
@@ -38,12 +38,13 @@ The build process includes TypeScript type checking with `tsc -noEmit -skipLibCh
 - Registers Obsidian as an available IDE connection option
 - Provides connection details (port, type, name) for automatic detection
 
-**WebSocket Communication Layer** (`main.ts:70-182`)
+**WebSocket Communication Layer** (`main.ts:186-236`)
 - Creates HTTP server with WebSocket upgrade handling using Node.js built-in modules
-- Implements custom WebSocket protocol without external dependencies
-- Manages multiple concurrent connections using raw TCP sockets
-- Enables Claude Code's `/ide` command to connect to Obsidian
-- Uses Node.js `http`, `crypto` modules for Electron compatibility
+- Implements RFC 6455 compliant WebSocket protocol without external dependencies
+- Includes secure authentication using `x-claude-code-ide-authorization` header validation
+- Manages multiple concurrent connections with proper frame parsing and masking
+- Enables Claude Code's `/ide` command to connect to Obsidian securely
+- Uses Node.js `http`, `crypto` modules for full Electron compatibility
 
 **Message Handling System** (`main.ts:187-261`)
 - Supports `files/read` - Read file contents from Obsidian vault
@@ -58,11 +59,12 @@ The build process includes TypeScript type checking with `tsc -noEmit -skipLibCh
 - Allows Claude Code's `/ide` command to discover and connect to Obsidian
 - Shows as "Obsidian" option in available IDE connections
 
-**File/Selection Tagging** (`main.ts:263-317`)
-- Hotkey: `Cmd+Shift+T` (Mac) / `Ctrl+Shift+T` (Windows/Linux)
-- Tags entire file if no selection, or specific text selection with line numbers
-- Broadcasts context to all connected Claude Code instances
-- Shows notifications with tagged content details
+**File/Selection Tagging** (`main.ts:405-455`)
+- Hotkey: `Cmd+Shift+T` (Mac) / `Ctrl+Shift+T` (Windows/Linux)  
+- Uses MCP-compliant `at_mentioned` method with `filePath`, `lineStart`, `lineEnd` parameters
+- Tags entire file if no selection, or specific text selection with 0-indexed line numbers
+- Broadcasts at-mentions to all connected Claude Code instances
+- Shows notifications with tagged content details and line ranges
 
 **Connection Management** (`main.ts:153-184`)
 - Tracks active WebSocket connections in a Set
@@ -112,7 +114,13 @@ Created at `~/.claude/ide/{port}.lock` for `/ide` command discovery:
 ### Key Dependencies
 - **obsidian** - Core Obsidian API for plugin development
 - Built-in Node.js modules: `fs`, `path`, `os`, `net`, `http`, `crypto`
-- **Note:** This implementation avoids external WebSocket libraries to ensure compatibility with Obsidian's Electron environment
+- **Note:** Zero external dependencies for WebSocket functionality - uses pure Node.js implementation for maximum Electron compatibility
+
+### Authentication System
+- **Secure Token Validation**: Uses UUID v4 authentication tokens stored in lock files
+- **Header-Based Auth**: Validates `x-claude-code-ide-authorization` header on WebSocket upgrade
+- **Connection Security**: Rejects unauthorized connections with proper HTTP error responses
+- **Token Generation**: Cryptographically secure random tokens using Node.js crypto module
 
 ## Claude Code Integration
 
@@ -124,12 +132,18 @@ This plugin is specifically designed to work with Claude Code's `/ide` command:
 - No manual configuration required - automatic discovery and connection
 
 ### MCP Protocol Implementation
-The plugin implements a subset of the Model Context Protocol (MCP) for communication with Claude Code:
+The plugin implements the WebSocket variant of Model Context Protocol (MCP) used by Claude Code's official IDE extensions:
 
 ### Supported Methods
+- `initialize` - MCP handshake with server capabilities and protocol version
+- `initialized` - Client initialization confirmation
 - `files/read` - Returns file content from Obsidian vault
-- `workspace/selection` - Returns current editor selection and cursor position
-- `context/add` - Receives tagged content from Obsidian UI
+- `workspace/selection` - Returns current editor selection and cursor position  
+- `resources/list` - Returns available resources (currently empty)
+
+### Supported Notifications
+- `at_mentioned` - Sent when user tags files/selections with `Cmd+Shift+T`
+- Format: `{filePath: string, lineStart?: number, lineEnd?: number}`
 
 ### Message Format
 All messages follow JSON-RPC 2.0 specification with MCP-specific parameters.

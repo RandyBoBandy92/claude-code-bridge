@@ -1,94 +1,215 @@
-# Obsidian Sample Plugin
+# Claude Code Bridge for Obsidian
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code](https://claude.ai/code) that enables Obsidian to appear as an available IDE in Claude Code's `/ide` command. Tag files and selections in Obsidian and send them directly to Claude Code for AI-powered analysis and assistance.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+🔗 **Seamless IDE Integration** - Obsidian appears as "Obsidian" in Claude Code's `/ide` command list  
+🔐 **Secure Authentication** - Uses cryptographic tokens for secure WebSocket connections  
+📝 **File & Selection Tagging** - Tag entire files or specific text selections with `Cmd+Shift+T`  
+🚀 **Zero Dependencies** - Pure Node.js implementation using only built-in modules  
+⚡ **Real-time Communication** - MCP-compliant WebSocket protocol for instant messaging  
+🛡️ **Connection Security** - Authenticated connections with proper error handling  
 
-## First time developing plugins?
+## Quick Start
 
-Quick starting guide for new plugin devs:
+### Installation
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+1. **Download the Plugin**
+   - Clone this repository into your Obsidian vault's plugins directory:
+   ```bash
+   cd /path/to/your/vault/.obsidian/plugins/
+   git clone https://github.com/yourusername/claude-code-bridge.git
+   ```
 
-## Releasing new releases
+2. **Install Dependencies**
+   ```bash
+   cd claude-code-bridge
+   npm install
+   ```
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+3. **Build the Plugin**
+   ```bash
+   npm run build
+   ```
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+4. **Enable in Obsidian**
+   - Open Obsidian Settings → Community Plugins
+   - Enable "Claude Code Bridge"
+   - You should see "Claude Code: Listening on [port]" in the status bar
 
-## Adding your plugin to the community plugin list
+### Usage
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+1. **Connect Claude Code to Obsidian**
+   ```bash
+   # In your terminal, run Claude Code's IDE command
+   claude /ide
+   ```
+   - Select "Obsidian" from the available IDE list
+   - Status should change to "Connected to Obsidian"
 
-## How to use
+2. **Tag Files and Selections**
+   - **Tag entire file**: Place cursor in file, press `Cmd+Shift+T` (Mac) or `Ctrl+Shift+T` (Windows/Linux)
+   - **Tag selection**: Select text, press `Cmd+Shift+T` (Mac) or `Ctrl+Shift+T` (Windows/Linux)
+   - Tagged content is instantly available to Claude Code for analysis
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+3. **Verify Connection**
+   - Status bar shows: "Claude Code: Connected (1)" when active
+   - Console logs show connection and tagging activity
+   - Claude Code receives at-mentions for tagged content
 
-## Manually installing the plugin
+## How It Works
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+### Architecture
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
+The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** that Claude Code can connect to:
 
-## Funding URL
+1. **Lock File Discovery** - Creates `~/.claude/ide/{port}.lock` for Claude Code's `/ide` command to discover
+2. **Secure Authentication** - Validates `x-claude-code-ide-authorization` header with cryptographic tokens  
+3. **WebSocket Communication** - RFC 6455 compliant WebSocket server with custom frame parsing
+4. **MCP Protocol** - Implements Claude Code's WebSocket variant of Model Context Protocol
+5. **At-Mention Broadcasting** - Sends tagged content using `at_mentioned` notifications
 
-You can include funding URLs where people who use your plugin can financially support it.
+### Technical Implementation
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+- **Zero External Dependencies** - Uses only Node.js built-in modules (`http`, `crypto`, `fs`, `net`)
+- **Electron Compatible** - Designed specifically for Obsidian's Electron environment
+- **Secure by Design** - Authentication required, connections bound to localhost only
+- **Hot Reload Support** - Development workflow with automatic plugin reloading
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
-```
+## Development
 
-If you have multiple URLs, you can also do:
+### Prerequisites
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
+- Node.js >= 16
+- Obsidian >= 0.15.0
+- Basic TypeScript knowledge
+
+### Development Setup
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/yourusername/claude-code-bridge.git
+   cd claude-code-bridge
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Start Development Mode**
+   ```bash
+   npm run dev
+   ```
+   This starts esbuild in watch mode with automatic recompilation.
+
+4. **Enable Hot Reload** (Optional but Recommended)
+   - Install a hot reload plugin for Obsidian
+   - Plugin will automatically reload when files change
+
+### Build Commands
+
+- `npm run dev` - Development mode with file watching and source maps
+- `npm run build` - Production build with TypeScript type checking
+- `npm run version` - Bump version and update manifest files
+
+### Key Files
+
+- `main.ts` - Core plugin implementation with WebSocket server
+- `manifest.json` - Plugin metadata and configuration  
+- `CLAUDE.md` - Development guidance and architecture documentation
+- `esbuild.config.mjs` - Build configuration for TypeScript compilation
+
+## Protocol Details
+
+### MCP (Model Context Protocol) Implementation
+
+The plugin implements Claude Code's WebSocket variant of MCP:
+
+**Supported Methods:**
+- `initialize` - Handshake with server capabilities
+- `initialized` - Client initialization confirmation
+- `files/read` - Read file contents from vault
+- `workspace/selection` - Get current editor selection
+- `resources/list` - List available resources
+
+**Notifications Sent:**
+- `at_mentioned` - When files/selections are tagged
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "method": "at_mentioned", 
+    "params": {
+      "filePath": "/path/to/file.md",
+      "lineStart": 10,
+      "lineEnd": 15
     }
-}
-```
+  }
+  ```
 
-## API Documentation
+### Authentication Flow
 
-See https://github.com/obsidianmd/obsidian-api
+1. Plugin generates UUID v4 authentication token
+2. Token stored in lock file at `~/.claude/ide/{port}.lock`
+3. Claude Code reads token and sends in `x-claude-code-ide-authorization` header
+4. Plugin validates token on WebSocket upgrade request
+5. Connection established if authentication succeeds
+
+## Troubleshooting
+
+### Common Issues
+
+**Plugin Not Appearing in `/ide` List**
+- Check if plugin is enabled in Obsidian settings
+- Verify lock file exists: `ls ~/.claude/ide/`
+- Check console for "Lock file created" message
+
+**"IDE disconnected" in Claude Code**
+- Ensure authentication is working (check console logs)
+- Try disabling and re-enabling the plugin
+- Check for firewall blocking localhost connections
+
+**Tagging Not Working** 
+- Verify connection: status bar should show "Connected (1)"
+- Check console for "Sent at-mention to Claude Code" messages
+- Ensure file is saved and has valid path
+
+### Debug Mode
+
+Enable detailed logging by checking the browser console:
+- "Authentication successful" - WebSocket handshake completed
+- "Raw data received" - Messages from Claude Code
+- "Sent at-mention" - Tagged content broadcasts
+
+## Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make changes and test thoroughly
+4. Run `npm run build` to ensure TypeScript compilation
+5. Submit a pull request with detailed description
+
+### Development Guidelines
+
+- Follow existing code patterns and conventions
+- Add comprehensive error handling
+- Update documentation for new features
+- Test with both file and selection tagging
+- Verify MCP protocol compliance
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by [claudecode.nvim](https://github.com/coder/claudecode.nvim) for protocol reverse-engineering
+- Built on the [Obsidian Plugin API](https://github.com/obsidianmd/obsidian-api)
+- Implements [Model Context Protocol (MCP)](https://spec.modelcontextprotocol.io) WebSocket variant
+
+---
+
+**Made with ❤️ for the Obsidian and Claude Code communities**
