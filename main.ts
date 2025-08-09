@@ -1,9 +1,15 @@
-import { App, Editor, MarkdownView, Notice, Plugin } from "obsidian";
+import { Editor, MarkdownView, Notice, Plugin, TAbstractFile, FileSystemAdapter } from "obsidian";
 import * as net from "net";
 import { WebSocketServer } from "./src/websocket";
 import { MCPHandler } from "./src/mcp-handler";
 import { LockFileManager } from "./src/lock-file";
 import { logger } from "./src/logger";
+import { WebSocketConnection, AtMentionMessage } from "./src/types";
+
+
+// Constants
+const SELECTION_CHANGE_DEBOUNCE_MS = 300;
+const CLAUDE_CODE_INIT_DELAY_MS = 1000;
 
 interface ClaudeCodeBridgeSettings {
 	port: number;
@@ -19,7 +25,7 @@ export default class ClaudeCodeBridge extends Plugin {
 	private webSocketServer: WebSocketServer | null = null;
 	private mcpHandler: MCPHandler;
 	private lockFileManager: LockFileManager;
-	private port: number = 0;
+	private port = 0;
 	private currentFile: string | null = null;
 	private selectionChangeTimeout: NodeJS.Timeout | null = null;
 
@@ -74,7 +80,7 @@ export default class ClaudeCodeBridge extends Plugin {
 						if (this.currentFile) {
 							this.sendSelectionChanged(this.currentFile);
 						}
-					}, 300);
+					}, SELECTION_CHANGE_DEBOUNCE_MS);
 				}
 			})
 		);
@@ -82,14 +88,14 @@ export default class ClaudeCodeBridge extends Plugin {
 		logger.log("Plugin loaded and initialized successfully");
 	}
 
-	private handleConnection(socket: any) {
+	private handleConnection(socket: WebSocketConnection) {
 		// Send initial file context if we have an active file
 		const activeFile = this.app.workspace.getActiveFile();
 		if (activeFile) {
 			this.currentFile = activeFile.path;
 			setTimeout(() => {
 				this.sendSelectionChanged(activeFile.path);
-			}, 1000); // Give Claude Code time to initialize
+			}, CLAUDE_CODE_INIT_DELAY_MS); // Give Claude Code time to initialize
 		}
 	}
 
@@ -101,7 +107,7 @@ export default class ClaudeCodeBridge extends Plugin {
 		logger.log("Plugin unloaded");
 	}
 
-	private handleFileChange(file: any) {
+	private handleFileChange(file: TAbstractFile | null) {
 		const newFilePath = file?.path || null;
 
 		// Only notify if file actually changed and we have connections
@@ -164,14 +170,17 @@ export default class ClaudeCodeBridge extends Plugin {
 			// Create WebSocket server
 			this.webSocketServer = new WebSocketServer(
 				this.port,
-				(message, socket) =>
-					this.mcpHandler.handleMessage(
-						message,
-						socket,
-						this.webSocketServer!.sendMessage.bind(
-							this.webSocketServer
-						)
-					),
+				(message, socket) => {
+					if (this.webSocketServer) {
+						this.mcpHandler.handleMessage(
+							message,
+							socket,
+							this.webSocketServer.sendMessage.bind(
+								this.webSocketServer
+							)
+						);
+					}
+				},
 				(socket) => this.handleConnection(socket)
 			);
 
@@ -179,9 +188,10 @@ export default class ClaudeCodeBridge extends Plugin {
 			await this.webSocketServer.start();
 
 			// Create lock file for IDE detection and get auth token
-			// TypeScript doesn't know about basePath but it exists at runtime
-			const vaultPath =
-				(this.app.vault.adapter as any).basePath || process.cwd();
+			// Get vault base path - works on desktop (plugin is desktop-only)
+			const vaultPath = this.app.vault.adapter instanceof FileSystemAdapter
+				? this.app.vault.adapter.getBasePath()
+				: process.cwd();
 			const authToken = await this.lockFileManager.createLockFile(
 				this.port,
 				vaultPath
@@ -245,7 +255,7 @@ export default class ClaudeCodeBridge extends Plugin {
 		}
 
 		const selection = editor.getSelection();
-		let atMentionMessage: any;
+		let atMentionMessage: AtMentionMessage;
 
 		if (selection) {
 			// Tag selection with line numbers (0-indexed for Claude)

@@ -1,16 +1,24 @@
 import * as http from "http";
 import * as crypto from "crypto";
 import { logger } from "./logger";
+import { WebSocketConnection, MCPMessage, UpgradeRequest } from "./types";
+
+// Constants for resource limits
+const MAX_CONNECTIONS = 10;
+const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB
+const MAX_MESSAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const HEALTH_CHECK_INTERVAL_MS = 30000; // 30 seconds
 
 export class WebSocketServer {
 	private httpServer: http.Server | null = null;
-	private connections: Set<any> = new Set();
-	private authToken: string = "";
+	private connections: Set<WebSocketConnection> = new Set();
+	private authToken = "";
+	private healthCheckInterval: NodeJS.Timer | null = null;
 
 	constructor(
 		private port: number,
-		private onMessage: (message: any, socket: any) => void,
-		private onConnection: (socket: any) => void
+		private onMessage: (message: MCPMessage, socket: WebSocketConnection) => void,
+		private onConnection: (socket: WebSocketConnection) => void
 	) {}
 
 	start(): Promise<void> {
@@ -23,6 +31,10 @@ export class WebSocketServer {
 
 			this.httpServer.listen(this.port, "127.0.0.1", () => {
 				logger.log(`HTTP server started on port ${this.port}`);
+				
+				// Start periodic health check for dead connections
+				this.startHealthCheck();
+				
 				resolve();
 			});
 
@@ -32,11 +44,15 @@ export class WebSocketServer {
 
 	stop(): Promise<void> {
 		return new Promise((resolve) => {
+			// Stop health check interval
+			if (this.healthCheckInterval) {
+				clearInterval(this.healthCheckInterval);
+				this.healthCheckInterval = null;
+			}
+			
 			// Close all connections
 			this.connections.forEach((socket) => {
-				if (!socket.destroyed) {
-					socket.destroy();
-				}
+				this.cleanupConnection(socket);
 			});
 			this.connections.clear();
 
@@ -56,20 +72,26 @@ export class WebSocketServer {
 		this.authToken = token;
 	}
 
-	broadcast(message: any) {
+	broadcast(message: MCPMessage) {
 		const activeConnections = Array.from(this.connections);
 		activeConnections.forEach((socket) => {
 			if (!socket.destroyed && socket.writable) {
 				this.sendMessage(socket, message);
 			} else {
-				this.connections.delete(socket);
+				logger.debug("Removing dead connection during broadcast");
+				this.cleanupConnection(socket);
 			}
 		});
 	}
 
-	private handleWebSocketUpgrade(request: any, socket: any, head: Buffer) {
+	private handleWebSocketUpgrade(request: UpgradeRequest, socket: WebSocketConnection, head: Buffer) {
+		// Sanitize headers before logging - remove auth token
+		const sanitizedHeaders = { ...request.headers };
+		if (sanitizedHeaders["x-claude-code-ide-authorization"]) {
+			sanitizedHeaders["x-claude-code-ide-authorization"] = "[REDACTED]";
+		}
 		logger.debug("WebSocket upgrade request:", {
-			headers: request.headers,
+			headers: sanitizedHeaders,
 			url: request.url,
 		});
 
@@ -99,6 +121,13 @@ export class WebSocketServer {
 		}
 
 		logger.debug("Authentication successful");
+		
+		// Check connection limit BEFORE accepting the WebSocket upgrade
+		if (this.connections.size >= MAX_CONNECTIONS) {
+			logger.warn(`Connection limit reached (${MAX_CONNECTIONS}), rejecting new connection`);
+			socket.end("HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain\r\n\r\nConnection limit reached");
+			return;
+		}
 
 		// Generate WebSocket accept key
 		const acceptKey = crypto
@@ -124,7 +153,8 @@ export class WebSocketServer {
 		this.handleConnection(socket);
 	}
 
-	private handleConnection(socket: any) {
+	private handleConnection(socket: WebSocketConnection) {
+		// Connection limit already checked in handleWebSocketUpgrade
 		this.connections.add(socket);
 		logger.log(`Client connected. Total connections: ${this.connections.size}`);
 
@@ -132,6 +162,13 @@ export class WebSocketServer {
 
 		socket.on("data", (data: Buffer) => {
 			try {
+				// Check buffer size limit to prevent memory exhaustion
+				if (buffer.length + data.length > MAX_BUFFER_SIZE) {
+					logger.error(`Buffer overflow protection triggered (${buffer.length + data.length} bytes)`);
+					this.cleanupConnection(socket);
+					return;
+				}
+				
 				logger.debug("Raw data received, length:", data.length);
 				// Handle WebSocket frame parsing
 				const messages = this.parseWebSocketFrames(data, buffer);
@@ -140,6 +177,19 @@ export class WebSocketServer {
 				logger.debug("Parsed messages count:", messages.parsed.length);
 				messages.parsed.forEach((messageText) => {
 					try {
+						// Check message size limit
+						if (messageText.length > MAX_MESSAGE_SIZE) {
+							logger.error(`Message too large: ${messageText.length} bytes (max: ${MAX_MESSAGE_SIZE})`);
+							this.sendMessage(socket, {
+								jsonrpc: "2.0",
+								error: {
+									code: -32600,
+									message: "Message too large"
+								}
+							});
+							return;
+						}
+						
 						logger.debug("Received message:", messageText);
 						const message = JSON.parse(messageText);
 						logger.debug("Parsed message:", message);
@@ -151,6 +201,7 @@ export class WebSocketServer {
 				});
 			} catch (error) {
 				logger.error("Error handling WebSocket data:", error);
+				this.cleanupConnection(socket);
 			}
 		});
 
@@ -159,9 +210,9 @@ export class WebSocketServer {
 			logger.log(`Client disconnected (hadError: ${hadError}). Total connections: ${this.connections.size}`);
 		});
 
-		socket.on("error", (error: any) => {
+		socket.on("error", (error: Error) => {
 			logger.error("WebSocket error:", error);
-			this.connections.delete(socket);
+			this.cleanupConnection(socket);
 		});
 
 		logger.debug("WebSocket connection established, waiting for client messages");
@@ -240,15 +291,34 @@ export class WebSocketServer {
 		};
 	}
 
-	sendMessage(socket: any, message: any) {
+	sendMessage(socket: WebSocketConnection, message: MCPMessage) {
 		if (!socket.destroyed && socket.writable) {
 			try {
 				const payload = JSON.stringify(message);
+				
+				// Check outgoing message size
+				if (payload.length > MAX_MESSAGE_SIZE) {
+					logger.error(`Outgoing message too large: ${payload.length} bytes (max: ${MAX_MESSAGE_SIZE})`);
+					// Send error response instead
+					const errorMessage: MCPMessage = {
+						jsonrpc: "2.0",
+						id: message.id,
+						error: {
+							code: -32600,
+							message: "Response too large"
+						}
+					};
+					const errorPayload = JSON.stringify(errorMessage);
+					const errorFrame = this.createWebSocketFrame(errorPayload);
+					socket.write(errorFrame);
+					return;
+				}
+				
 				const frame = this.createWebSocketFrame(payload);
 				socket.write(frame);
 			} catch (error) {
 				logger.error("Failed to send message:", error);
-				this.connections.delete(socket);
+				this.cleanupConnection(socket);
 			}
 		}
 	}
@@ -280,5 +350,25 @@ export class WebSocketServer {
 
 	getConnectionCount(): number {
 		return this.connections.size;
+	}
+	
+	private cleanupConnection(socket: WebSocketConnection) {
+		this.connections.delete(socket);
+		if (!socket.destroyed) {
+			socket.destroy();
+		}
+	}
+	
+	private startHealthCheck() {
+		// Periodically check for dead connections
+		this.healthCheckInterval = setInterval(() => {
+			this.connections.forEach((socket) => {
+				if (socket.destroyed || !socket.writable) {
+					logger.debug("Removing dead connection during health check");
+					this.connections.delete(socket);
+				}
+			});
+			logger.debug(`Health check: ${this.connections.size} active connections`);
+		}, HEALTH_CHECK_INTERVAL_MS);
 	}
 }

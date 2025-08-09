@@ -5,8 +5,8 @@ import * as crypto from "crypto";
 import { logger } from "./logger";
 
 export class LockFileManager {
-	private lockFile: string = "";
-	private authToken: string = "";
+	private lockFile = "";
+	private authToken = "";
 
 	async createLockFile(port: number, workspacePath: string): Promise<string> {
 		const claudeDir = path.join(os.homedir(), ".claude", "ide");
@@ -40,7 +40,8 @@ export class LockFileManager {
 			port: port,
 		};
 
-		fs.writeFileSync(this.lockFile, JSON.stringify(lockData, null, 2));
+		// Write lock file with restrictive permissions (owner read/write only)
+		fs.writeFileSync(this.lockFile, JSON.stringify(lockData, null, 2), { mode: 0o600 });
 		logger.log(`Lock file created: ${this.lockFile}`);
 		
 		return this.authToken;

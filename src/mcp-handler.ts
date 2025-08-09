@@ -1,10 +1,11 @@
 import { App, MarkdownView, TFile } from "obsidian";
 import { logger } from "./logger";
+import { MCPMessage, WebSocketConnection } from "./types";
 
 export class MCPHandler {
 	constructor(private app: App) {}
 
-	async handleMessage(message: any, socket: any, sendMessage: (socket: any, message: any) => void) {
+	async handleMessage(message: MCPMessage, socket: WebSocketConnection, sendMessage: (socket: WebSocketConnection, message: MCPMessage) => void) {
 		logger.debug("Handling MCP message:", message);
 
 		try {
@@ -78,8 +79,9 @@ export class MCPHandler {
 		}
 	}
 
-	private async handleFileRead(message: any, socket: any, sendMessage: (socket: any, message: any) => void) {
-		const filePath = message.params?.path;
+	private async handleFileRead(message: MCPMessage, socket: WebSocketConnection, sendMessage: (socket: WebSocketConnection, message: MCPMessage) => void) {
+		const params = message.params as { path?: string } | undefined;
+		const filePath = params?.path;
 		if (!filePath) {
 			throw new Error("File path is required");
 		}
@@ -97,7 +99,7 @@ export class MCPHandler {
 		});
 	}
 
-	private async handleWorkspaceSelection(message: any, socket: any, sendMessage: (socket: any, message: any) => void) {
+	private async handleWorkspaceSelection(message: MCPMessage, socket: WebSocketConnection, sendMessage: (socket: WebSocketConnection, message: MCPMessage) => void) {
 		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!activeView) {
 			throw new Error("No active markdown view");
