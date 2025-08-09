@@ -42,10 +42,9 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
 ### Usage
 
 1. **Connect Claude Code to Obsidian**
-   ```bash
-   # In your terminal, run Claude Code's IDE command
-   claude /ide
-   ```
+   - Open Claude Code in your terminal
+   - Type `/ide` command
+   - Wait for available IDE list to appear
    - Select "Obsidian" from the available IDE list
    - Status should change to "Connected to Obsidian"
 
@@ -81,13 +80,6 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 - **Secure by Design** - Authentication required, connections bound to localhost only
 - **Development-Aware Logging** - Reduced console output in production builds
 - **Hot Reload Support** - Development workflow with automatic plugin reloading
-
-### Production-Ready Features
-
-- **Resource Protection** - Connection limits (10 max), buffer limits (1MB), message size limits (10MB)
-- **Memory Management** - Automatic cleanup of dead connections, health monitoring every 30 seconds
-- **Security Hardening** - Lock file permissions (600), sanitized debug logs, graceful error handling
-- **Performance Optimization** - Prevents memory leaks, UI freezing, and resource exhaustion
 
 ## Development
 
@@ -145,64 +137,9 @@ claude-code-bridge/
 └── esbuild.config.mjs   # Build configuration for TypeScript compilation
 ```
 
-**Architecture Benefits:**
-- **Maintainable** - Each module has a single responsibility
-- **Testable** - Clean interfaces between components
-- **Readable** - Main plugin file reduced from 668 to ~280 lines
-- **Debuggable** - Modular logging with development awareness
-
 ## Protocol Details
 
-### MCP (Model Context Protocol) Implementation
-
-The plugin implements Claude Code's WebSocket variant of MCP:
-
-**Supported Methods:**
-- `initialize` - Handshake with server capabilities
-- `initialized` - Client initialization confirmation
-- `files/read` - Read file contents from vault
-- `workspace/selection` - Get current editor selection
-- `resources/list` - List available resources
-
-**Notifications Sent:**
-- `at_mentioned` - When files/selections are tagged
-  ```json
-  {
-    "jsonrpc": "2.0",
-    "method": "at_mentioned", 
-    "params": {
-      "filePath": "/path/to/file.md",
-      "lineStart": 10,
-      "lineEnd": 15
-    }
-  }
-  ```
-
-- `selection_changed` - When switching files or changing selections (enables file context display)
-  ```json
-  {
-    "jsonrpc": "2.0",
-    "method": "selection_changed",
-    "params": {
-      "text": "selected text",
-      "filePath": "/path/to/file.md",
-      "fileUrl": "file:///path/to/file.md",
-      "selection": {
-        "start": {"line": 0, "character": 0},
-        "end": {"line": 0, "character": 10},
-        "isEmpty": false
-      }
-    }
-  }
-  ```
-
-### Authentication Flow
-
-1. Plugin generates UUID v4 authentication token
-2. Token stored in lock file at `~/.claude/ide/{port}.lock`
-3. Claude Code reads token and sends in `x-claude-code-ide-authorization` header
-4. Plugin validates token on WebSocket upgrade request
-5. Connection established if authentication succeeds
+For detailed information about the MCP (Model Context Protocol) implementation, WebSocket communication, authentication flow, and debugging, see [PROTOCOL.md](PROTOCOL.md).
 
 ## Troubleshooting
 
