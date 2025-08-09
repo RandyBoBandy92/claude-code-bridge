@@ -1,134 +1,583 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Notice, Plugin, TFile } from "obsidian";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+import * as net from "net";
+import * as http from "http";
+import * as crypto from "crypto";
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
+interface ClaudeCodeBridgeSettings {
+	port: number;
+	enabled: boolean;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+const DEFAULT_SETTINGS: ClaudeCodeBridgeSettings = {
+	port: 0, // Will be set dynamically
+	enabled: true,
+};
+export default class ClaudeCodeBridge extends Plugin {
+	settings: ClaudeCodeBridgeSettings;
+	private httpServer: http.Server | null = null;
+	private port: number = 0;
+	private lockFile: string = "";
+	private connections: Set<any> = new Set();
 
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+		// Initialize the Claude Code bridge
+		if (this.settings.enabled) {
+			await this.initializeBridge();
+		}
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
+		// Add the main tagging command with hotkey
+		this.addCommand({
+			id: "tag-for-claude",
+			name: "Tag file/selection for Claude Code",
+			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "t" }],
+			editorCallback: (editor: Editor, view: MarkdownView) =>
+				this.tagForClaude(editor, view),
+		});
+
+		// Add status bar item to show bridge status
 		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+		this.updateStatusBar(statusBarItemEl);
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		console.log(
+			"Claude Code Bridge plugin loaded and initialized successfully"
+		);
 	}
 
-	onunload() {
+	async onunload() {
+		await this.closeBridge();
+		console.log("Claude Code Bridge unloaded");
+	}
 
+	private updateStatusBar(statusBarItem: HTMLElement) {
+		if (this.httpServer && this.connections.size > 0) {
+			statusBarItem.setText(
+				`Claude Code: Connected (${this.connections.size})`
+			);
+		} else if (this.httpServer) {
+			statusBarItem.setText(`Claude Code: Listening on ${this.port}`);
+		} else {
+			statusBarItem.setText("Claude Code: Disconnected");
+		}
+	}
+
+	private async initializeBridge() {
+		try {
+			// Find available port
+			this.port = await this.findAvailablePort();
+
+			// Create HTTP server with WebSocket upgrade handling
+			this.httpServer = http.createServer();
+
+			// Handle WebSocket upgrade requests
+			this.httpServer.on("upgrade", (request, socket, head) => {
+				this.handleWebSocketUpgrade(request, socket, head);
+			});
+
+			// Start the server
+			this.httpServer.listen(this.port, "127.0.0.1", () => {
+				console.log(
+					`Claude Code Bridge: HTTP server started on port ${this.port}`
+				);
+			});
+
+			// Create lock file for IDE detection
+			await this.createLockFile();
+
+			console.log(
+				`Claude Code Bridge: WebSocket server started on port ${this.port}`
+			);
+			new Notice(
+				`Claude Code Bridge: Started on port ${this.port} - Lock file: ${this.lockFile}`
+			);
+		} catch (error) {
+			console.error("Failed to initialize Claude Code bridge:", error);
+			new Notice(
+				`Claude Code Bridge: Failed to start - ${error.message}`
+			);
+		}
+	}
+
+	private async closeBridge() {
+		// Close all connections
+		this.connections.forEach((socket) => {
+			if (!socket.destroyed) {
+				socket.destroy();
+			}
+		});
+		this.connections.clear();
+
+		// Close server
+		if (this.httpServer) {
+			this.httpServer.close();
+			this.httpServer = null;
+		}
+
+		// Remove lock file
+		if (this.lockFile && fs.existsSync(this.lockFile)) {
+			try {
+				fs.unlinkSync(this.lockFile);
+				console.log("Lock file removed");
+			} catch (error) {
+				console.error("Failed to remove lock file:", error);
+			}
+		}
+	}
+
+	private async findAvailablePort(): Promise<number> {
+		return new Promise((resolve, reject) => {
+			const server = net.createServer();
+			server.listen(0, "127.0.0.1", () => {
+				const address = server.address();
+				if (address && typeof address === "object") {
+					const port = address.port;
+					server.close(() => resolve(port));
+				} else {
+					reject(new Error("Could not get server address"));
+				}
+			});
+			server.on("error", reject);
+		});
+	}
+
+	private async createLockFile() {
+		const claudeDir = path.join(os.homedir(), ".claude", "ide");
+
+		// Ensure directory exists
+		if (!fs.existsSync(claudeDir)) {
+			fs.mkdirSync(claudeDir, { recursive: true });
+		}
+
+		this.lockFile = path.join(claudeDir, `${this.port}.lock`);
+
+		// Generate auth token
+		const authToken =
+			crypto.randomBytes(16).toString("hex") +
+			"-" +
+			crypto.randomBytes(2).toString("hex") +
+			"-" +
+			crypto.randomBytes(2).toString("hex") +
+			"-" +
+			crypto.randomBytes(2).toString("hex") +
+			"-" +
+			crypto.randomBytes(6).toString("hex");
+
+		const lockData = {
+			pid: process.pid,
+			workspaceFolders: [
+				this.app.vault.adapter.basePath || process.cwd(),
+			],
+			ideName: "Obsidian",
+			transport: "ws",
+			runningInWindows: process.platform === "win32",
+			authToken: authToken,
+			port: this.port,
+		};
+
+		fs.writeFileSync(this.lockFile, JSON.stringify(lockData, null, 2));
+		console.log(`Lock file created: ${this.lockFile}`);
+	}
+
+	private handleWebSocketUpgrade(request: any, socket: any, head: Buffer) {
+		console.log("WebSocket upgrade request:", {
+			headers: request.headers,
+			url: request.url
+		});
+		
+		const key = request.headers["sec-websocket-key"];
+		if (!key) {
+			console.log("No sec-websocket-key header, rejecting");
+			socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+			return;
+		}
+
+		// Generate WebSocket accept key
+		const acceptKey = crypto
+			.createHash("sha1")
+			.update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+			.digest("base64");
+
+		// Send WebSocket handshake response
+		const responseHeaders = [
+			"HTTP/1.1 101 Switching Protocols",
+			"Upgrade: websocket", 
+			"Connection: Upgrade",
+			`Sec-WebSocket-Accept: ${acceptKey}`,
+			"Sec-WebSocket-Protocol: mcp",
+			"",
+			"",
+		].join("\r\n");
+
+		console.log("Sending WebSocket handshake response:", responseHeaders);
+		socket.write(responseHeaders);
+
+		// Handle the WebSocket connection
+		this.handleClaudeConnection(socket);
+	}
+
+	private handleClaudeConnection(socket: any) {
+		this.connections.add(socket);
+		console.log(
+			`Claude Code connected. Total connections: ${this.connections.size}`
+		);
+
+		let buffer = Buffer.alloc(0);
+
+		socket.on("data", (data: Buffer) => {
+			try {
+				console.log("Raw data received:", data);
+				// Handle WebSocket frame parsing
+				const messages = this.parseWebSocketFrames(data, buffer);
+				buffer = messages.remaining;
+
+				messages.parsed.forEach((messageText) => {
+					try {
+						console.log("Received message:", messageText);
+						const message = JSON.parse(messageText);
+						console.log("Parsed message:", message);
+						this.handleMCPMessage(message, socket);
+					} catch (error) {
+						console.error("Error parsing message:", error);
+						console.error("Raw message text:", messageText);
+					}
+				});
+			} catch (error) {
+				console.error("Error handling WebSocket data:", error);
+			}
+		});
+
+		socket.on("close", (hadError: boolean) => {
+			this.connections.delete(socket);
+			console.log(
+				`Claude Code disconnected (hadError: ${hadError}). Total connections: ${this.connections.size}`
+			);
+		});
+
+		socket.on("error", (error: any) => {
+			console.error("WebSocket error:", error);
+			this.connections.delete(socket);
+		});
+
+		// Don't send hello message immediately - wait for client to initiate
+		console.log(
+			"WebSocket connection established, waiting for client messages"
+		);
+	}
+
+	private async handleMCPMessage(message: any, ws: any) {
+		console.log("Handling MCP message:", message);
+
+		try {
+			// Handle different message types
+			if (message.method) {
+				console.log(`Processing method: ${message.method}`);
+				switch (message.method) {
+					case "initialize":
+						console.log("Handling initialize request");
+						this.sendMessage(ws, {
+							jsonrpc: "2.0",
+							id: message.id,
+							result: {
+								protocolVersion: "2024-11-05",
+								capabilities: {
+									resources: {},
+									tools: {},
+									prompts: {},
+								},
+								serverInfo: {
+									name: "Obsidian",
+									version: "1.0.0",
+								},
+							},
+						});
+						break;
+					case "initialized":
+						console.log("Client initialized successfully");
+						break;
+					case "files/read":
+						await this.handleFileRead(message, ws);
+						break;
+					case "workspace/selection":
+						await this.handleWorkspaceSelection(message, ws);
+						break;
+					case "resources/list":
+						console.log("Handling resources/list request");
+						this.sendMessage(ws, {
+							jsonrpc: "2.0",
+							id: message.id,
+							result: {
+								resources: [],
+							},
+						});
+						break;
+					default:
+						console.log(`Unhandled method: ${message.method}`);
+						// Send error for unhandled methods
+						this.sendMessage(ws, {
+							jsonrpc: "2.0",
+							id: message.id,
+							error: {
+								code: -32601,
+								message: "Method not found",
+							},
+						});
+				}
+			} else {
+				console.log("Message without method field:", message);
+			}
+		} catch (error) {
+			console.error("Error handling MCP message:", error);
+			if (message.id) {
+				this.sendMessage(ws, {
+					jsonrpc: "2.0",
+					id: message.id,
+					error: {
+						code: -32603,
+						message: error.message,
+					},
+				});
+			}
+		}
+	}
+
+	private async handleFileRead(message: any, ws: any) {
+		const filePath = message.params?.path;
+		if (!filePath) {
+			throw new Error("File path is required");
+		}
+
+		const file = this.app.vault.getAbstractFileByPath(filePath);
+		if (!(file instanceof TFile)) {
+			throw new Error(`File not found: ${filePath}`);
+		}
+
+		const content = await this.app.vault.read(file);
+		this.sendMessage(ws, {
+			jsonrpc: "2.0",
+			id: message.id,
+			result: { content },
+		});
+	}
+
+	private async handleWorkspaceSelection(message: any, ws: any) {
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!activeView) {
+			throw new Error("No active markdown view");
+		}
+
+		const editor = activeView.editor;
+		const selection = editor.getSelection();
+		const cursor = editor.getCursor();
+
+		this.sendMessage(ws, {
+			jsonrpc: "2.0",
+			id: message.id,
+			result: {
+				selection,
+				cursor: {
+					line: cursor.line,
+					ch: cursor.ch,
+				},
+			},
+		});
+	}
+
+	private async tagForClaude(editor: Editor, view: MarkdownView) {
+		const file = view.file;
+		if (!file) {
+			new Notice("No active file");
+			return;
+		}
+
+		const selection = editor.getSelection();
+		let contextMessage: any;
+
+		if (selection) {
+			// Tag selection with line numbers
+			const from = editor.getCursor("from");
+			const to = editor.getCursor("to");
+
+			contextMessage = {
+				jsonrpc: "2.0",
+				method: "context/add",
+				params: {
+					type: "selection",
+					file: file.path,
+					content: selection,
+					range: {
+						start: { line: from.line + 1, character: from.ch },
+						end: { line: to.line + 1, character: to.ch },
+					},
+				},
+			};
+
+			new Notice(
+				`Tagged selection: ${file.path}#L${from.line + 1}-${
+					to.line + 1
+				}`
+			);
+		} else {
+			// Tag entire file
+			const content = await this.app.vault.read(file);
+			contextMessage = {
+				jsonrpc: "2.0",
+				method: "context/add",
+				params: {
+					type: "file",
+					file: file.path,
+					content: content,
+				},
+			};
+
+			new Notice(`Tagged file: ${file.path}`);
+		}
+
+		// Send to all connected Claude Code instances
+		if (this.connections.size === 0) {
+			new Notice("No Claude Code connections active");
+			return;
+		}
+
+		this.broadcast(contextMessage);
+		console.log("Sent context to Claude Code:", contextMessage);
+	}
+
+	private parseWebSocketFrames(
+		data: Buffer,
+		existingBuffer: Buffer
+	): { parsed: string[]; remaining: Buffer } {
+		const fullBuffer = Buffer.concat([existingBuffer, data]);
+		const messages: string[] = [];
+		let offset = 0;
+
+		while (offset < fullBuffer.length) {
+			if (offset + 2 > fullBuffer.length) break;
+
+			const firstByte = fullBuffer[offset];
+			const secondByte = fullBuffer[offset + 1];
+
+			const opcode = firstByte & 0x0f;
+			const masked = (secondByte & 0x80) === 0x80;
+			let payloadLength = secondByte & 0x7f;
+
+			let payloadOffset = offset + 2;
+
+			// Handle extended payload length
+			if (payloadLength === 126) {
+				if (payloadOffset + 2 > fullBuffer.length) break;
+				payloadLength = fullBuffer.readUInt16BE(payloadOffset);
+				payloadOffset += 2;
+			} else if (payloadLength === 127) {
+				if (payloadOffset + 8 > fullBuffer.length) break;
+				const bigPayloadLength =
+					fullBuffer.readBigUInt64BE(payloadOffset);
+				payloadLength = Number(bigPayloadLength);
+				payloadOffset += 8;
+			}
+
+			// Handle mask
+			let maskKey: Buffer | null = null;
+			if (masked) {
+				if (payloadOffset + 4 > fullBuffer.length) break;
+				maskKey = fullBuffer.subarray(payloadOffset, payloadOffset + 4);
+				payloadOffset += 4;
+			}
+
+			if (payloadOffset + payloadLength > fullBuffer.length) break;
+
+			// Extract payload
+			if (opcode === 0x1) {
+				// Text frame
+				let payload = fullBuffer.subarray(
+					payloadOffset,
+					payloadOffset + payloadLength
+				);
+
+				// Unmask payload if masked
+				if (masked && maskKey) {
+					const unmaskedPayload = Buffer.alloc(payload.length);
+					for (let i = 0; i < payload.length; i++) {
+						unmaskedPayload[i] = payload[i] ^ maskKey[i % 4];
+					}
+					payload = unmaskedPayload;
+				}
+
+				messages.push(payload.toString("utf8"));
+			}
+
+			offset = payloadOffset + payloadLength;
+		}
+
+		return {
+			parsed: messages,
+			remaining: fullBuffer.subarray(offset),
+		};
+	}
+
+	private sendMessage(socket: any, message: any) {
+		if (!socket.destroyed && socket.writable) {
+			try {
+				const payload = JSON.stringify(message);
+				const frame = this.createWebSocketFrame(payload);
+				socket.write(frame);
+			} catch (error) {
+				console.error("Failed to send message:", error);
+				this.connections.delete(socket);
+			}
+		}
+	}
+
+	private createWebSocketFrame(data: string): Buffer {
+		const payload = Buffer.from(data, "utf8");
+		const payloadLength = payload.length;
+
+		let frame: Buffer;
+
+		if (payloadLength < 126) {
+			frame = Buffer.allocUnsafe(2);
+			frame[0] = 0x81; // FIN + text frame
+			frame[1] = payloadLength;
+		} else if (payloadLength < 65536) {
+			frame = Buffer.allocUnsafe(4);
+			frame[0] = 0x81; // FIN + text frame
+			frame[1] = 126;
+			frame.writeUInt16BE(payloadLength, 2);
+		} else {
+			frame = Buffer.allocUnsafe(10);
+			frame[0] = 0x81; // FIN + text frame
+			frame[1] = 127;
+			frame.writeBigUInt64BE(BigInt(payloadLength), 2);
+		}
+
+		return Buffer.concat([frame, payload]);
+	}
+
+	private broadcast(message: any) {
+		// Create a copy of connections to avoid modification during iteration
+		const activeConnections = Array.from(this.connections);
+		activeConnections.forEach((socket) => {
+			if (!socket.destroyed && socket.writable) {
+				this.sendMessage(socket, message);
+			} else {
+				// Clean up dead connections
+				this.connections.delete(socket);
+			}
+		});
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			await this.loadData()
+		);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
 	}
 }
