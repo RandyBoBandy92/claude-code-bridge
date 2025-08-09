@@ -37,7 +37,7 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
 4. **Enable in Obsidian**
    - Open Obsidian Settings → Community Plugins
    - Enable "Claude Code Bridge"
-   - You should see "Claude Code: Listening on [port]" in the status bar
+   - Check console logs for "Claude Code Bridge: Started on port [port]" confirmation
 
 ### Usage
 
@@ -55,7 +55,6 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
    - Tagged content is instantly available to Claude Code for analysis
 
 3. **Verify Connection & File Context**
-   - Status bar shows: "Claude Code: Connected (1)" when active  
    - **"In [filename]" appears in Claude Code's bottom corner** showing your current file
    - Switch between files in Obsidian to see real-time context updates
    - Console logs show connection and tagging activity
@@ -193,7 +192,7 @@ The plugin implements Claude Code's WebSocket variant of MCP:
 - Check for firewall blocking localhost connections
 
 **Tagging Not Working** 
-- Verify connection: status bar should show "Connected (1)"
+- Verify connection by checking console for connection logs
 - Check console for "Sent at-mention to Claude Code" messages
 - Ensure file is saved and has valid path
 

@@ -77,7 +77,6 @@ The build process includes TypeScript type checking with `tsc -noEmit -skipLibCh
 **Connection Management** (`main.ts:153-184`)
 - Tracks active WebSocket connections in a Set
 - Handles connection lifecycle (connect, message, close, error)
-- Updates status bar with connection count and status
 - Automatic cleanup on plugin unload
 
 ## Plugin Configuration
@@ -112,7 +111,7 @@ Created at `~/.claude/ide/{port}.lock` for `/ide` command discovery:
 5. Plugin will appear as "Obsidian" option when running Claude Code's `/ide` command
 
 ### Testing the Bridge
-1. Start the plugin (check status bar for "Listening on {port}")
+1. Start the plugin (check console logs for server startup confirmation)
 2. Run Claude Code's `/ide` command - Obsidian should appear as an available option
 3. Connect to Obsidian from Claude Code
 4. Test file tagging with `Cmd+Shift+T` and selection tagging

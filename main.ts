@@ -23,7 +23,6 @@ export default class ClaudeCodeBridge extends Plugin {
 	private connections: Set<any> = new Set();
 	private authToken: string = "";
 	private currentFile: string | null = null;
-	private statusBarItem: HTMLElement | null = null;
 	private selectionChangeTimeout: NodeJS.Timeout | null = null;
 
 	async onload() {
@@ -43,9 +42,6 @@ export default class ClaudeCodeBridge extends Plugin {
 				this.tagForClaude(editor, view),
 		});
 
-		// Add status bar item to show bridge status
-		this.statusBarItem = this.addStatusBarItem();
-		this.updateStatusBar(this.statusBarItem);
 
 		// Register workspace events for file tracking
 		this.registerEvent(
@@ -87,17 +83,6 @@ export default class ClaudeCodeBridge extends Plugin {
 		console.log("Claude Code Bridge unloaded");
 	}
 
-	private updateStatusBar(statusBarItem: HTMLElement) {
-		if (this.httpServer && this.connections.size > 0) {
-			statusBarItem.setText(
-				`Claude Code: Connected (${this.connections.size})`
-			);
-		} else if (this.httpServer) {
-			statusBarItem.setText(`Claude Code: Listening on ${this.port}`);
-		} else {
-			statusBarItem.setText("Claude Code: Disconnected");
-		}
-	}
 
 	private handleFileChange(file: any) {
 		const newFilePath = file?.path || null;
@@ -321,9 +306,6 @@ export default class ClaudeCodeBridge extends Plugin {
 		console.log(
 			`Claude Code connected. Total connections: ${this.connections.size}`
 		);
-		if (this.statusBarItem) {
-			this.updateStatusBar(this.statusBarItem);
-		}
 
 		let buffer = Buffer.alloc(0);
 
@@ -356,9 +338,6 @@ export default class ClaudeCodeBridge extends Plugin {
 			console.log(
 				`Claude Code disconnected (hadError: ${hadError}). Total connections: ${this.connections.size}`
 			);
-			if (this.statusBarItem) {
-				this.updateStatusBar(this.statusBarItem);
-			}
 		});
 
 		socket.on("error", (error: any) => {
