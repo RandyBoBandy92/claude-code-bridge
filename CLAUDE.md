@@ -15,13 +15,16 @@ This is the **Claude Code Bridge** plugin for Obsidian - a fully functional Type
 
 **Note:** This project uses a hot reload plugin, so `npm run dev` should be run in the background during development for automatic plugin reloading in Obsidian.
 
-### TypeScript Compilation
-The build process includes TypeScript type checking with `tsc -noEmit -skipLibCheck` before bundling with esbuild.
+### Development Commands
 
-### Linting (Optional)
-- Install ESLint globally: `npm install -g eslint`
-- Run ESLint: `eslint main.ts`
-- Analyze entire src folder: `eslint .\src\`
+- `npm run dev` - Start development mode with file watching and automatic recompilation with hot reload
+- `npm run build` - Build production version with TypeScript type checking
+- `npm run lint` - Run ESLint to check code quality and style
+- `npm run lint:fix` - Automatically fix ESLint issues where possible
+- `npm run version` - Bump version and update manifest files
+
+### Code Quality
+The build process includes TypeScript type checking with `tsc -noEmit -skipLibCheck` before bundling with esbuild. ESLint is configured with TypeScript rules for consistent code style and quality.
 
 ## Architecture Overview
 
@@ -88,6 +91,25 @@ The plugin follows a modular architecture with separate concerns cleanly divided
 - Handles connection lifecycle (connect, message, close, error)
 - Automatic cleanup on plugin unload
 - Clean separation between connection handling and business logic
+
+## Production-Ready Performance & Security
+
+### Resource Protection
+- **Connection Limits**: Maximum 10 concurrent connections to prevent resource exhaustion
+- **Buffer Protection**: 1MB limit on WebSocket frame buffers to prevent memory leaks
+- **Message Size Limits**: 10MB maximum for both incoming and outgoing messages to prevent UI freezing
+- **Health Monitoring**: 30-second interval cleanup of dead connections
+
+### Security Enhancements
+- **Lock File Permissions**: Restricted to owner read/write only (mode 600) for auth token protection
+- **Sanitized Logging**: Authentication tokens redacted from debug logs as `[REDACTED]`
+- **Localhost Binding**: Server exclusively binds to 127.0.0.1 to prevent external access
+- **Graceful Error Handling**: Proper connection cleanup on all error conditions
+
+### Memory Management
+- **Automatic Cleanup**: Dead connections removed during broadcasts and periodic health checks
+- **Resource Limits**: Prevents DoS attacks and accidental resource exhaustion
+- **Proper Shutdown**: All connections, timers, and resources cleaned up on plugin unload
 
 ## Plugin Configuration
 

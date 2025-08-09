@@ -82,6 +82,13 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 - **Development-Aware Logging** - Reduced console output in production builds
 - **Hot Reload Support** - Development workflow with automatic plugin reloading
 
+### Production-Ready Features
+
+- **Resource Protection** - Connection limits (10 max), buffer limits (1MB), message size limits (10MB)
+- **Memory Management** - Automatic cleanup of dead connections, health monitoring every 30 seconds
+- **Security Hardening** - Lock file permissions (600), sanitized debug logs, graceful error handling
+- **Performance Optimization** - Prevents memory leaks, UI freezing, and resource exhaustion
+
 ## Development
 
 ### Prerequisites
@@ -117,6 +124,8 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 
 - `npm run dev` - Development mode with file watching and source maps
 - `npm run build` - Production build with TypeScript type checking
+- `npm run lint` - Run ESLint to check code quality and style
+- `npm run lint:fix` - Automatically fix ESLint issues where possible
 - `npm run version` - Bump version and update manifest files
 
 ### Project Structure
@@ -125,12 +134,13 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 claude-code-bridge/
 ├── main.ts              # Core plugin class and Obsidian integration (~280 lines)
 ├── src/
-│   ├── websocket.ts     # WebSocket server implementation
+│   ├── websocket.ts     # WebSocket server implementation with resource limits
 │   ├── mcp-handler.ts   # MCP protocol message handling
 │   ├── lock-file.ts     # IDE discovery and auth token management
-│   └── logger.ts        # Development-aware logging system
+│   ├── logger.ts        # Development-aware logging system
+│   └── types.ts         # TypeScript interfaces and type definitions
 ├── manifest.json        # Plugin metadata and configuration  
-├── package.json         # Updated with correct plugin details
+├── package.json         # Dependencies and build scripts (includes lint)
 ├── CLAUDE.md            # Development guidance and architecture documentation
 └── esbuild.config.mjs   # Build configuration for TypeScript compilation
 ```
