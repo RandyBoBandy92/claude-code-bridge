@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice, Plugin, TAbstractFile, FileSystemAdapter } from "obsidian";
+import { Editor, MarkdownView, Notice, Plugin, TAbstractFile, FileSystemAdapter, Platform } from "obsidian";
 import * as net from "net";
 import { WebSocketServer } from "./src/websocket";
 import { MCPHandler } from "./src/mcp-handler";
@@ -36,16 +36,17 @@ export default class ClaudeCodeBridge extends Plugin {
 		this.mcpHandler = new MCPHandler(this.app);
 		this.lockFileManager = new LockFileManager();
 
-		// Initialize the Claude Code bridge
-		if (this.settings.enabled) {
+		// Initialize the Claude Code bridge (desktop only)
+		if (this.settings.enabled && Platform.isDesktopApp) {
 			await this.initializeBridge();
+		} else if (this.settings.enabled && !Platform.isDesktopApp) {
+			logger.log("Claude Code Bridge is desktop-only, skipping initialization on mobile");
 		}
 
-		// Add the main tagging command with hotkey
+		// Add the main tagging command (no default hotkey to avoid conflicts)
 		this.addCommand({
 			id: "tag-for-claude",
 			name: "Tag file/selection for Claude Code",
-			hotkeys: [{ modifiers: ["Mod", "Alt"], key: "k" }],
 			editorCallback: (editor: Editor, view: MarkdownView) =>
 				this.tagForClaude(editor, view),
 		});

@@ -49,8 +49,9 @@ A seamless integration between [Obsidian](https://obsidian.md) and [Claude Code]
    - Status should change to "Connected to Obsidian"
 
 2. **Tag Files and Selections**
-   - **Tag entire file**: Place cursor in file, press `Cmd+Option+K` (Mac) or `Ctrl+Alt+K` (Windows/Linux)
-   - **Tag selection**: Select text, press `Cmd+Option+K` (Mac) or `Ctrl+Alt+K` (Windows/Linux)
+   - **Set up hotkey**: Open Obsidian Settings → Hotkeys, search for "Tag file/selection for Claude Code", assign your preferred key combination
+   - **Tag entire file**: Place cursor in file, use your assigned hotkey
+   - **Tag selection**: Select text, use your assigned hotkey
    - Tagged content is instantly available to Claude Code for analysis
 
 3. **Verify Connection & File Context**
@@ -86,7 +87,7 @@ The plugin creates a **WebSocket-based MCP (Model Context Protocol) server** tha
 ### Prerequisites
 
 - Node.js >= 16
-- Obsidian >= 0.15.0
+- Obsidian >= 0.15.0 (desktop version only)
 - Basic TypeScript knowledge
 
 ### Development Setup

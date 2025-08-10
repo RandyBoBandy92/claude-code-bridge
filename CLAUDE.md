@@ -34,9 +34,10 @@ The plugin follows a modular architecture with separate concerns cleanly divided
 
 **ClaudeCodeBridge Plugin Class** (`main.ts`)
 - Main plugin class extending Obsidian's Plugin base class (~280 lines, down from 668)
+- Uses `Platform.isDesktopApp` to ensure desktop-only operation
 - Manages WebSocket server lifecycle and coordinates between modules
 - Handles Obsidian workspace events (file changes, selection tracking)
-- Provides file tagging functionality via keyboard shortcut
+- Provides file tagging functionality via configurable command (no default hotkey)
 
 **WebSocket Server Module** (`src/websocket.ts`)
 - Encapsulates all WebSocket server functionality
@@ -72,7 +73,7 @@ The plugin follows a modular architecture with separate concerns cleanly divided
 - Shows as "Obsidian" option in available IDE connections
 
 **File/Selection Tagging**
-- Hotkey: `Cmd+Option+K` (Mac) / `Ctrl+Alt+K` (Windows/Linux)  
+- Command: "Tag file/selection for Claude Code" (no default hotkey - user must assign in Settings > Hotkeys)
 - Uses MCP-compliant `at_mentioned` method with `filePath`, `lineStart`, `lineEnd` parameters
 - Tags entire file if no selection, or specific text selection with 0-indexed line numbers
 - Broadcasts at-mentions to all connected Claude Code instances
