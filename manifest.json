@@ -1,7 +1,7 @@
 {
 	"id": "claude-code-bridge",
 	"name": "Claude Code Bridge",
-	"version": "1.0.6",
+	"version": "1.0.7",
 	"minAppVersion": "0.15.0",
 	"description": "Bridge between Obsidian and Claude Code for seamless file/selection tagging",
 	"author": "Randy",
