@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as crypto from "crypto";
+import { Platform } from "obsidian";
 import { logger } from "./logger";
 
 export class LockFileManager {
@@ -35,7 +36,7 @@ export class LockFileManager {
 			workspaceFolders: [workspacePath || process.cwd()],
 			ideName: "Obsidian",
 			transport: "ws",
-			runningInWindows: process.platform === "win32",
+			runningInWindows: Platform.isWin,
 			authToken: this.authToken,
 			port: port,
 		};
