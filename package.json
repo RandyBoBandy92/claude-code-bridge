@@ -1,6 +1,6 @@
 {
 	"name": "claude-code-bridge",
-	"version": "1.0.10",
+	"version": "1.1.0",
 	"description": "Bridge between Obsidian and Claude Code for seamless file/selection tagging via WebSocket MCP server",
 	"type": "module",
 	"main": "main.js",
