@@ -9,7 +9,7 @@ export class LockFileManager {
 	private lockFile = "";
 	private authToken = "";
 
-	async createLockFile(port: number, workspacePath: string): Promise<string> {
+	createLockFile(port: number, workspacePath: string): string {
 		const claudeDir = path.join(os.homedir(), ".claude", "ide");
 
 		// Ensure directory exists

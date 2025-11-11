@@ -95,7 +95,8 @@ export class WebSocketServer {
 			url: request.url,
 		});
 
-		const key = request.headers["sec-websocket-key"];
+		const keyHeader = request.headers["sec-websocket-key"];
+		const key = Array.isArray(keyHeader) ? keyHeader[0] : keyHeader;
 		if (!key) {
 			logger.debug("No sec-websocket-key header, rejecting");
 			socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");

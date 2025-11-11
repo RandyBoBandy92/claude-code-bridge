@@ -99,7 +99,7 @@ export class MCPHandler {
 		});
 	}
 
-	private async handleWorkspaceSelection(message: MCPMessage, socket: WebSocketConnection, sendMessage: (socket: WebSocketConnection, message: MCPMessage) => void) {
+	private handleWorkspaceSelection(message: MCPMessage, socket: WebSocketConnection, sendMessage: (socket: WebSocketConnection, message: MCPMessage) => void) {
 		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!activeView) {
 			throw new Error("No active markdown view");

@@ -11,24 +11,24 @@ export class Logger {
 			typeof console.log.toString === 'function';
 	}
 
-	log(message: string, ...args: any[]) {
+	log(message: string, ...args: unknown[]) {
 		if (this.isDevelopment) {
-			console.log(`[Claude Code Bridge] ${message}`, ...args);
+			console.debug(`[Claude Code Bridge] ${message}`, ...args);
 		}
 	}
 
-	error(message: string, ...args: any[]) {
+	error(message: string, ...args: unknown[]) {
 		// Always log errors, even in production
 		console.error(`[Claude Code Bridge] ${message}`, ...args);
 	}
 
-	warn(message: string, ...args: any[]) {
+	warn(message: string, ...args: unknown[]) {
 		if (this.isDevelopment) {
 			console.warn(`[Claude Code Bridge] ${message}`, ...args);
 		}
 	}
 
-	debug(message: string, ...args: any[]) {
+	debug(message: string, ...args: unknown[]) {
 		if (this.isDevelopment) {
 			console.debug(`[Claude Code Bridge] ${message}`, ...args);
 		}

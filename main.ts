@@ -46,7 +46,7 @@ export default class ClaudeCodeBridge extends Plugin {
 		// Add the main tagging command (no default hotkey to avoid conflicts)
 		this.addCommand({
 			id: "tag-for-claude",
-			name: "Tag file/selection for Claude Code",
+			name: "Tag file/selection for claude code",
 			editorCallback: (editor: Editor, view: MarkdownView) =>
 				this.tagForClaude(editor, view),
 		});
@@ -100,11 +100,13 @@ export default class ClaudeCodeBridge extends Plugin {
 		}
 	}
 
-	async onunload() {
+	onunload() {
 		if (this.selectionChangeTimeout) {
 			clearTimeout(this.selectionChangeTimeout);
 		}
-		await this.closeBridge();
+		this.closeBridge().catch(err =>
+			logger.error("Error during plugin cleanup:", err)
+		);
 		logger.log("Plugin unloaded");
 	}
 
@@ -173,7 +175,7 @@ export default class ClaudeCodeBridge extends Plugin {
 				this.port,
 				(message, socket) => {
 					if (this.webSocketServer) {
-						this.mcpHandler.handleMessage(
+						void this.mcpHandler.handleMessage(
 							message,
 							socket,
 							this.webSocketServer.sendMessage.bind(
@@ -193,7 +195,7 @@ export default class ClaudeCodeBridge extends Plugin {
 			const vaultPath = this.app.vault.adapter instanceof FileSystemAdapter
 				? this.app.vault.adapter.getBasePath()
 				: process.cwd();
-			const authToken = await this.lockFileManager.createLockFile(
+			const authToken = this.lockFileManager.createLockFile(
 				this.port,
 				vaultPath
 			);
@@ -240,7 +242,7 @@ export default class ClaudeCodeBridge extends Plugin {
 		});
 	}
 
-	private async tagForClaude(editor: Editor, view: MarkdownView) {
+	private tagForClaude(editor: Editor, view: MarkdownView) {
 		const file = view.file;
 		if (!file) {
 			new Notice("No active file");
@@ -251,7 +253,7 @@ export default class ClaudeCodeBridge extends Plugin {
 			!this.webSocketServer ||
 			this.webSocketServer.getConnectionCount() === 0
 		) {
-			new Notice("No Claude Code connections active");
+			new Notice("No claude code connections active");
 			return;
 		}
 
