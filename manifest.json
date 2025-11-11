@@ -1,7 +1,7 @@
 {
 	"id": "claude-code-bridge",
 	"name": "Claude Code Bridge",
-	"version": "1.0.9",
+	"version": "1.0.10",
 	"minAppVersion": "0.15.0",
 	"description": "Bridge between your vault and Claude Code for seamless file/selection tagging.",
 	"author": "Randy",
